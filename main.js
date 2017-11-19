@@ -21,6 +21,7 @@ var app = express();
 app.set('view engine', 'ejs');  
 var bodyParser = require('body-parser');
 var md5 = require('md5');
+var session = require('express-session');
 
 app.get('/', function(req, res) {
 	var error = undefined;
@@ -29,6 +30,7 @@ app.get('/', function(req, res) {
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({secret: 'secret-token-here', resave: false, saveUninitialized: false}));
 
 // Attempting to login
 app.post('/loginAuth', function(req, res) {
@@ -41,7 +43,9 @@ app.post('/loginAuth', function(req, res) {
 			error = "The username or password you entered is incorrect."
 			res.render('index', {error: error});
 		} else {
-			res.send('User exists!');
+			var session = req.session;
+			session.username = username;
+			res.redirect('/home');
 		}
 	});
 	return;
@@ -52,6 +56,7 @@ app.post('/register', function(req, res) {
 	var username = req.body.username;
 	var password = req.body.password;
 	res.render('register', {username: username, password: password}); 
+	return;
 })
 
 // Attempting to register new user
@@ -74,8 +79,15 @@ app.post('/registerAuth', function(req, res) {
 			connection.query(query, [username, hashedPassword, firstName, lastName], function(err, rows, fields) {
 				if (err) throw err;
 			});
+			res.redirect('/home');
 		}
 	})
+	return;
+})
+
+app.get('/home', function(req, res) {
+	res.render('home');
+	console.log(req.session.username);
 })
 
 app.listen(3000, () => console.log("Server running at http://localhost:3000/"));
