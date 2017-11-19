@@ -37,6 +37,9 @@
 	<body>
 		<div id="login">
 	  	<h1 class="ui header center aligned title">PriCoSha </h1>
+	  	<% if (typeof error !== 'undefined') { %>
+	  		<div class="ui negative message"> <%= error %> </div>
+	  	<% } %>
 	  	<form class="ui form" action="/login" method="POST">
 	  		<div ui class="ui segment">
 	  			<div class="field"> 
@@ -53,7 +56,7 @@
 		  				<input type="password" name="password" placeholder="Password"/>
 		  			</div>
 	  			</div>
-	  			<div class="ui fluid compact large submit button" style="background:#CAEBF2; margin-bottom: 10px" type="submit"> Login </div>
+	  			<input type="submit" value="Login" class="ui fluid compact large submit button" style="background:#CAEBF2; margin-bottom: 10px"/>
 	  			<div class="ui fluid compact large register button" style="background:#A9A9A9; color: white"> Register </div>
 	  		</div>
 	  	</form>
