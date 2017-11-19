@@ -36,6 +36,7 @@ app.use(session({secret: 'secret-token-here', resave: false, saveUninitialized: 
 app.post('/loginAuth', function(req, res) {
 	var username = req.body.username;
 	var password = md5(req.body.password);
+	error = undefined;
 	var query = "SELECT * FROM Person WHERE username = ? AND password = ?";
 	connection.query(query, [username, password], function(err, rows, fields) {
 		// No user exists, render error message
@@ -55,7 +56,8 @@ app.post('/loginAuth', function(req, res) {
 app.post('/register', function(req, res) {
 	var username = req.body.username;
 	var password = req.body.password;
-	res.render('register', {username: username, password: password}); 
+	error = undefined;
+	res.render('register', {username: username, password: password, error: error}); 
 	return;
 })
 
@@ -67,6 +69,7 @@ app.post('/registerAuth', function(req, res) {
 	var password = req.body.password;
 	var hashedPassword = md5(password);
 
+	error = undefined;
 	var query = "SELECT * FROM Person WHERE username = ?";
 	connection.query(query, username, function(err, rows, fields) {
 		// Username already exists
@@ -79,7 +82,7 @@ app.post('/registerAuth', function(req, res) {
 			connection.query(query, [username, hashedPassword, firstName, lastName], function(err, rows, fields) {
 				if (err) throw err;
 			});
-			res.redirect('/home');
+			res.redirect('/home', {username: username});
 		}
 	})
 	return;
@@ -94,9 +97,13 @@ app.get('/home', function(req, res) {
 				"(SELECT group_name, username FROM FriendGroup NATURAL JOIN Member WHERE Member.username = ?))"
 	connection.query(query, username, function(err, rows, fields) {
 		if (err) throw err;
-		console.log(rows);
 	})
-	res.render('home');
+	res.render('home', {username: username});
+})
+
+app.get('/logout', function(req, res) {
+	req.session.destroy();
+	res.redirect('/');
 })
 
 app.listen(3000, () => console.log("Server running at http://localhost:3000/"));
