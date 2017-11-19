@@ -46,18 +46,18 @@
 	  				<label> Username </label>
 	  				<div class="ui left icon input">
             	<i class="user icon"></i>
-            	<input type="text" name="username" placeholder="Username">
+            	<input type="text" name="username" placeholder="Username" required>
           	</div>
 	  			</div>
 	  			<div class="field">
 	  				<label> Password </label>
 	  				<div class="ui left icon input">
 	  					<i class="lock icon"></i>
-		  				<input type="password" name="password" placeholder="Password"/>
+		  				<input type="password" name="password" placeholder="Password" required/>
 		  			</div>
 	  			</div>
-	  			<input type="submit" value="Login" class="ui fluid compact large submit button" style="background:#CAEBF2; margin-bottom: 10px"/>
-	  			<div class="ui fluid compact large register button" style="background:#A9A9A9; color: white"> Register </div>
+	  			<input formaction="/loginAuth" type="submit" value="Login" class="ui fluid compact large submit button" style="background:#CAEBF2; margin-bottom: 10px"/>
+	  			<input formaction="/register" type="submit" value="Register" class="ui fluid compact large register button" style="background:#A9A9A9; color: white"/>
 	  		</div>
 	  	</form>
 	  </div>
