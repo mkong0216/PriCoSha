@@ -86,8 +86,17 @@ app.post('/registerAuth', function(req, res) {
 })
 
 app.get('/home', function(req, res) {
+	var username = req.session.username;
+	var query = "SELECT Content.id, Content.content_name " +
+				"FROM Content, Share " +
+				"WHERE Content.id = Share.id AND " +
+				"(Content.public = TRUE OR (Share.group_name, Share.username) IN " +
+				"(SELECT group_name, username FROM FriendGroup NATURAL JOIN Member WHERE Member.username = ?))"
+	connection.query(query, username, function(err, rows, fields) {
+		if (err) throw err;
+		console.log(rows);
+	})
 	res.render('home');
-	console.log(req.session.username);
 })
 
 app.listen(3000, () => console.log("Server running at http://localhost:3000/"));
