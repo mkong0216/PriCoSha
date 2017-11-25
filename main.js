@@ -11,7 +11,7 @@ var connection = mysql.createConnection({
 
 connection.connect(function(err) {
 	if (err) throw err;
-	console.log("connected");
+	console.log("Connected to database");
 });
 
 // Creating web server
@@ -24,8 +24,7 @@ var md5 = require('md5');
 var session = require('express-session');
 
 app.get('/', function(req, res) {
-	var error = undefined;
-	res.render('index');
+	res.render('index', {error: false});
 });
 
 app.use(bodyParser.json());
@@ -36,13 +35,12 @@ app.use(session({secret: 'secret-token-here', resave: false, saveUninitialized: 
 app.post('/loginAuth', function(req, res) {
 	var username = req.body.username;
 	var password = md5(req.body.password);
-	error = undefined;
 	var query = "SELECT * FROM Person WHERE username = ? AND password = ?";
 	connection.query(query, [username, password], function(err, rows, fields) {
 		// No user exists, render error message
 		if (rows.length === 0) {
-			error = "The username or password you entered is incorrect."
-			res.render('index', {error: error});
+			var err = "The username or password you entered is incorrect."
+			res.render('index', {error: true, err: err});
 		} else {
 			var session = req.session;
 			session.username = username;
@@ -56,8 +54,7 @@ app.post('/loginAuth', function(req, res) {
 app.post('/register', function(req, res) {
 	var username = req.body.username;
 	var password = req.body.password;
-	error = undefined;
-	res.render('register', {username: username, password: password, error: error}); 
+	res.render('register', {username: username, password: password, error: false}); 
 	return;
 })
 
@@ -69,20 +66,19 @@ app.post('/registerAuth', function(req, res) {
 	var password = req.body.password;
 	var hashedPassword = md5(password);
 
-	error = undefined;
 	var query = "SELECT * FROM Person WHERE username = ?";
 	connection.query(query, username, function(err, rows, fields) {
 		// Username already exists
 		if (rows.length > 0) {
-			error = "This username is already registered."
-			res.render('register', {username: username, password: password, error: error});
+			var err = "This username is already registered."
+			res.render('register', {username: username, password: password, error: true, err: err});
 		} else {
 			// Username does not exist, insert into database
 			var query = "INSERT INTO Person (username, password, first_name, last_name) Values (?, ?, ?, ?)";
 			connection.query(query, [username, hashedPassword, firstName, lastName], function(err, rows, fields) {
 				if (err) throw err;
 			});
-			res.redirect('/home', {username: username});
+			res.redirect('/home');
 		}
 	})
 	return;
@@ -90,16 +86,93 @@ app.post('/registerAuth', function(req, res) {
 
 app.get('/home', function(req, res) {
 	var username = req.session.username;
-	var query = "SELECT Content.id, Content.content_name " +
-				"FROM Content, Share " +
-				"WHERE Content.id = Share.id AND " +
-				"(Content.public = TRUE OR (Share.group_name, Share.username) IN " +
-				"(SELECT group_name, username FROM FriendGroup NATURAL JOIN Member WHERE Member.username = ?))"
-	connection.query(query, username, function(err, rows, fields) {
+	var success = req.session.success;
+	var friendGroups = "SELECT group_name, username_creator FROM Member WHERE username = ?"
+	connection.query(friendGroups, username, function(err, rows, fields) {
 		if (err) throw err;
 	})
-	res.render('home', {username: username});
+	req.session.success = null; 
+	res.render('home', {username: username, error: false, success: success});
 })
+
+app.post('/create-group', function(req, res) {
+	var creator = req.session.username;
+	var groupName = req.body.group_name;
+	var description = req.body.description;
+	var members = req.body.members.split(',');
+	members.push(creator);
+	var errArray = []
+
+	var promises = members.map((member) => checkUserExists(member));
+	promises.push(checkGroupNotExists(creator, groupName));
+
+	return Promise.all(promises)
+		.then((errStrings, error) => {
+			if (checkAnyErrors(errStrings) === 0) {
+				createFriendGroup(creator, groupName, description);
+				members.map((member) => addMemberToGroup(member, groupName, creator)); 
+				req.session.success = "You have successfully created the FriendGroup " + groupName;
+				res.redirect('/home');
+			} else {
+				res.render('home', {username: creator, error: true, err: errStrings});
+			}
+		});
+})
+
+function checkGroupNotExists(username, groupName) {
+	var query = "SELECT * FROM FriendGroup WHERE username = ? AND group_name = ?";
+	return new Promise((resolve, reject) => {
+		connection.query(query, [username, groupName], (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length !== 0) {
+				var errString = "You already have a FriendGroup named " + groupName; 
+				resolve(errString);
+			} else {
+				resolve(null);
+			}
+		})
+	})
+}
+
+function checkAnyErrors(errArray) {
+	count = 0;
+	for (var i = 0; i < errArray.length; i++) {
+		if (errArray[i] !== null) count += 1; 
+	}
+	return count; 
+}
+
+function checkUserExists(member) {
+	var query = "SELECT * FROM Person WHERE username = ?";
+	return new Promise((resolve, reject) => {
+		connection.query(query, member, (err, rows) => {
+			if (err) return reject(err);
+			var errString = ''
+			if (rows.length === 0) {
+				var errString = "The user " + member + " does not exist";
+				resolve(errString);
+			} else {
+				resolve(null);
+			}
+		});
+	})
+}
+
+function createFriendGroup(creator, groupName, description) {
+	var query = "INSERT INTO FriendGroup(group_name, username, description) VALUES (?, ?, ?)";
+	connection.query(query, [groupName, creator, description], function(err, rows, fields) {
+		if (err) throw err;
+	});
+	return;
+}
+
+function addMemberToGroup(member, group, creator) {
+	var query = "INSERT INTO Member(username, group_name, username_creator) VALUES (?, ?, ?)";
+	connection.query(query, [member, group, creator], function (err, rows, fields) {
+		if (err) throw err;
+	});
+	return; 
+}
 
 app.get('/logout', function(req, res) {
 	req.session.destroy();

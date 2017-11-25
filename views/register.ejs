@@ -37,8 +37,8 @@
 	<body>
     <div id="register">
       <h1 class="ui header center aligned title">PriCoSha </h1>
-      <% if (typeof error !== 'undefined') { %>
-        <div class="ui negative message"> <%= error %> </div>
+      <% if (error) { %>
+        <div class="ui negative message"> <%= err %> </div>
       <% } %>
       <form class="ui form" action="/registerAuth" method="POST">
         <div ui class="ui segment">
