@@ -11,11 +11,14 @@
     <style>
     	body {
     		background: #EFEFEF;
+        margin, padding: 0;
     	}
+
     	#header {
     		padding: 10px;
     		background: white;
     	}
+
     	.ui.header.title {
     		font-family: 'Unica One', cursive;
     		width: 75vw;
@@ -82,6 +85,16 @@
         margin: 75px auto;
       }
 
+      .ui.segment.content-image {
+        width: 100%;
+        height: 100%;
+      }
+
+      .ui.grid.contents {
+        padding: 10px;
+        margin: 10px;
+      }
+
       #success-message {
         width: 50%;
         margin: 15px auto;
@@ -107,8 +120,8 @@
   	<div id="header">
   		<h1 class="ui header title"> PriCoSha 
   			<div class="shortcuts">
-	  			<i class="users icon"></i>
-	  			<i class="home icon"></i>
+	  			<a href="/FriendGroups"><i class="users icon"></i></a>
+	  			<a href="/home"><i class="home icon"></i></a>
 	  			<a href="/logout"><i class="sign out icon"></i></a>
 	  		</div>
   		</h1>
@@ -127,23 +140,51 @@
   			<h1 class="ui header"> Hello <%= username %> </h1>
   			<div class="user-actions">
   				<div onclick="toggleModal('content-modal')" class="ui compact labeled icon basic button">
-  				  <i class="upload icon"></i> Upload Content
+  				  <i class="upload icon"></i> Share Content
   				</div>
   				<div onclick="toggleModal('friendGroup-modal')" class="ui compact labeled icon basic button">
   					<i class="add square icon"></i> Create FriendGroup 
   				</div>
   			</div>
   		</div>
-  		<div class="ui grid">
+  		<div class="ui centered grid contents">
+        <% if (typeof contents !== 'undefined') { %>
+          <% contents.forEach((content) => { %>
+            <div class="four wide column">
+              <div class="ui segment content-image">
+                <!-- content.username = poster of content -->
+                <h3 class="ui dividing header"> 
+                  <i class="camera retro icon"></i> 
+                  <%= content.username %> 
+                </h3>
+                <a href="/content/<%= content.id%>">
+                  <img class="ui fluid image content" src="<%= content.file_path %>"/>
+                </a>
+                <div class="ui divider"> </div>
+                <div class="content-info"> 
+                  <!-- content.content_name = caption of content -->
+                  <b> <%= content.content_name %> </b> <br/>
+                  Posted at: <%= content.timest %> <br/>
+                  <% if (content.group_name !== null) { %>
+                    <!-- content.group_name = FriendGroup content is shared to -->
+                    <i> Shared from <%= content.group_name %> </i>
+                  <% } else { %>
+                    <i> Public </i>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
   		</div>
       
       <!-- Add Content Modal -->
       <div id="content-modal">
         <div class="ui segment content"> 
-          <h2 class="ui dividing header">Add Content</h2>
+          <h2 class="ui dividing header">Share Content</h2>
           <i onclick="toggleModal('content-modal')" class="window close outline large icon"></i>
-          <form class="ui form">
-            <div class="field">
+          <form class="ui form" action="/share-content" method="POST">
+            <div class="required field">
               <label> URL </label>
               <input type="text" name="file_path" placeholder="Paste a URL">
             </div>
@@ -152,15 +193,36 @@
               <input maxlength="50" name="content_name" placeholder="Your text here">
             </div>
             <div class="inline field">
-              <div class="ui checkbox">
-                <input onclick="toggleModal('share')" type="checkbox" id="private">
+              <div class="ui toggle checkbox">
+                <input onclick="toggleModal('share')" type="checkbox" id="isPrivate" name="isPrivate">
                 <label for="private">Make content private? </label>
               </div>
-            </div>   
+            </div>  
+
+            <!-- Share with which FriendGroups Modal -->
             <div id="share" class="ui segment">
-              <div class="field">
+              <div class="required field">
                 <label> Share with which FriendGroup(s)? </label>
+                <div class="field">
+                  <% if (groups !== null) { %>
+                    <% groups.forEach(group => { %>
+                      <div class="item">
+                        <div class="ui checkbox" style="padding: 3px">
+                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>">
+                          <label for="group_name"> <%= group.group_name %> </label>
+                        </div>
+                      </div>
+                    <% }) %>
+                  <% } %>
+                </div>
               </div>
+            </div> 
+            <!-- End of Share with which FriendGroups Modal -->
+
+            <div class="ui divider"></div>
+            <div class="user-actions">
+              <input formaction="/share-content" type="submit" value="Share" class="ui primary right floated submit button">
+              <div onclick="toggleModal('content-modal')" class="ui button"> Cancel </div>
             </div>   
           </form>
         </div>
@@ -208,7 +270,7 @@
             <div class="ui divider"></div>
             <div class="user-actions">
               <input formaction="/create-group" type="submit" value="Create" class="ui primary right floated submit button">
-              <button onclick="toggleModal('friendGroup-modal')" class="ui button"> Cancel </button>
+              <div onclick="toggleModal('friendGroup-modal')" class="ui button"> Cancel </div>
             </div>
           </form>
         </div>
@@ -217,8 +279,8 @@
 
     <script>
       function toggleModal(id) {
-        var contentModal = document.getElementById(id);
-        contentModal.classList.toggle("active");
+        var modal = document.getElementById(id);
+        modal.classList.toggle("active");
       }
     </script>
     <script>
