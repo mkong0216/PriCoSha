@@ -116,7 +116,7 @@
 		            <div class="menu"></div>
 		          </div>
 		        </div>
-		        <input formaction="/content/<%=contentInfo.id%>/add-tags" type="submit" value="Add User(s)" class="ui bottom attached button" style="width: 100%;">
+		        <input formaction="/content/<%=contentInfo.id%>/add-tags" type="submit" value="Tag User(s)" class="ui bottom attached button" style="width: 100%;">
 		      </form>
 	  		</div>
 	  	</div>
@@ -141,12 +141,12 @@
           <% if (tagged !== null) { %>
           	Tagged: 
           	<% tagged.forEach((taggee) => { %>
-          		<%= taggee.first_name %> <%= taggee.last_name %> 
+          		<a class="ui small tag label"> <%= taggee.first_name %> <%= taggee.last_name %> </a>
           	<% }) %>
         	<% } %>
-        	<div class="ui divider"></div>
         	<div class="ui comments">
         		<% if (comments !== null) { %>
+        		<div class="ui divider"></div>
         			<% comments.forEach((comment) => { %>
         				<div class="comment">
         					<a class="author"> <%= comment.username %> </a>

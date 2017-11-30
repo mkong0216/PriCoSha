@@ -164,13 +164,15 @@
                 <div class="content-info"> 
                   <!-- content.content_name = caption of content -->
                   <b> <%= content.content_name %> </b> <br/>
+                  Content ID: <%= content.id %> <br/>
                   Posted at: <%= content.timest %> <br/>
-                  <% if (content.group_name !== null) { %>
+                  Shared from: 
+                    <% if (content.group_name !== null) { %>
                     <!-- content.group_name = FriendGroup content is shared to -->
-                    <i> Shared from <%= content.group_name %> </i>
-                  <% } else { %>
-                    <i> Public </i>
-                  <% } %>
+                    <a class="ui basic blue label"> <%= content.group_name %> </a> 
+                    <% } else { %>
+                    <a class="ui basic blue label"> Public </a>
+                    <% } %>
                 </div>
               </div>
             </div>
