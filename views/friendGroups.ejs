@@ -101,6 +101,15 @@
       #remove-field .field {
         display: none;
       }
+
+      #success-message {
+        width: 50%;
+        margin: 15px auto;
+      }
+
+      #success-message.closed {
+        display: none;
+      }
  	  </style>
 	</head>
   <body>
@@ -114,6 +123,14 @@
   		</h1>
   	</div>
     <div id="content">
+      <!-- Success Modal -->
+      <% if (typeof success !== 'undefined' && success !== null) { %>
+        <div id="success-message" class="ui positive message">
+          <i class="close icon"></i>
+          <div class="header"> Successful Submission </div>
+          <p> <%= success %></p>
+        </div>
+      <% } %>
       <div class="pending-tags">
         <h3 class="ui header"> Pending Tags </h3>
         <div class="ui cards">
@@ -203,15 +220,15 @@
           <form class="ui form" action="/edit-friendGroup" method="POST">
             <div class="inline field">
               <label class="friend-group"> 
-                <% if (typeof action !== 'undefined') { %>
-                  <% if (action[0] == 'add') { %>
+                <% if (action !== null) { %>
+                  <% if (action[0] === 'add') { %>
                     Adding a New Member to the FriendGroup: 
                   <% } else { %>
                     Removing a Member From the FriendGroup: 
                   <% } %>
                 <% } %>
               </label>
-              <% if (typeof action !== 'undefined') { %>
+              <% if (action !== null) { %>
                 <input class="ui fluid" name="friend-group" value="<%= action[1] %>" readonly="" type="text">
               <% } else { %>
                 <input name="friend-group" readonly="" type="text">
@@ -269,7 +286,7 @@
             </div>
             <div class="ui divider"></div>
             <div class="user-actions">
-              <% if (typeof action !== 'undefined') { %>
+              <% if (action !== null) { %>
                 <% if (action[0] === 'add') { %>
                   <input formaction="/add-member" type="submit" value="Add" id="add-user" class="ui primary right floated submit button">
                 <% } else { %>
@@ -294,6 +311,7 @@
         $(".ui.radio.checkbox").checkbox('uncheck');
         $("#add-username").hide();
         $("#add-name").hide();
+        $('.ui.form .grouped.fields.add-user').hide();
         $(currentGroupClassName).hide();
       }
 
@@ -321,10 +339,10 @@
           classNames.forEach((name) => {
             currentGroupClassName += "." + name;
           })
+          $('.ui.form .grouped.fields.add-user').hide();
           $(currentGroupClassName + '.field').show();
           $('#remove-user').show();
           $('#add-user').hide();
-          $('.ui.form .grouped.fields.add-user').hide();
         }
       }
     </script>
@@ -352,6 +370,10 @@
           $('.ui.radio.checkbox.username').checkbox('uncheck');
           $('#add-name').show();
           $('#add-username').hide();
+        });
+
+        $('.message .close').on('click', function() {
+          $(this).closest('.message').transition('fade');
         });
       });
     </script>

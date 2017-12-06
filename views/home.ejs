@@ -60,7 +60,7 @@
 
       #content-modal, 
       #friendGroup-modal {
-        position: absolute;
+        position: fixed;
         top: 0px;
         left: 0px;
         width: 100%;
@@ -92,7 +92,7 @@
 
       .ui.grid.contents {
         padding: 10px;
-        margin: 10px;
+        margin: 20px;
       }
 
       #success-message {
@@ -210,8 +210,8 @@
                     <% groups.forEach(group => { %>
                       <div class="item">
                         <div class="ui checkbox" style="padding: 3px">
-                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>">
-                          <label for="group_name"> <%= group.group_name %> </label>
+                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>,<%= group.username_creator%>">
+                          <label for="group_name"> <%= group.group_name %> (Created by: <b> <%= group.username_creator %> </b>)</label>
                         </div>
                       </div>
                     <% }) %>
