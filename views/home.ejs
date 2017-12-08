@@ -60,7 +60,7 @@
 
       #content-modal, 
       #friendGroup-modal {
-        position: absolute;
+        position: fixed;
         top: 0px;
         left: 0px;
         width: 100%;
@@ -92,7 +92,7 @@
 
       .ui.grid.contents {
         padding: 10px;
-        margin: 10px;
+        margin: 20px;
       }
 
       #success-message {
@@ -114,11 +114,15 @@
       .window.close.outline.icon:hover {
         color: #CAEBF2;
       }
+
+      .ui.basic.small.blue.label {
+        margin-top: 5px;
+      }
   	</style>
   </head>
   <body>
   	<div id="header">
-  		<h1 class="ui header title"> PriCoSha 
+  		<h1 class="ui header title"> <a href="/home" style="color: #FF3B3F"> PriCoSha </a> 
   			<div class="shortcuts">
 	  			<a href="/FriendGroups"><i class="users icon"></i></a>
 	  			<a href="/home"><i class="home icon"></i></a>
@@ -169,9 +173,9 @@
                   Shared from: 
                     <% if (content.group_name !== null) { %>
                     <!-- content.group_name = FriendGroup content is shared to -->
-                    <a class="ui basic blue label"> <%= content.group_name %> </a> 
+                    <a href="/home/<%= content.group_name %>" class="ui basic small blue label"> <%= content.group_name %> </a>
                     <% } else { %>
-                    <a class="ui basic blue label"> Public </a>
+                    <a href="/home/public" class="ui basic small blue label"> Public </a>
                     <% } %>
                 </div>
               </div>
@@ -210,8 +214,8 @@
                     <% groups.forEach(group => { %>
                       <div class="item">
                         <div class="ui checkbox" style="padding: 3px">
-                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>">
-                          <label for="group_name"> <%= group.group_name %> </label>
+                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>,<%= group.username_creator%>">
+                          <label for="group_name"> <%= group.group_name %> (Created by: <b> <%= group.username_creator %> </b>)</label>
                         </div>
                       </div>
                     <% }) %>
@@ -263,10 +267,7 @@
               <label> Add people to your group </label>
               <div class="ui fluid selection search dropdown multiple">
                 <input name="members" type="hidden">
-                <div class="default text">Search for people to add by username</div>
-                <i class="dropdown icon"></i>
-                <div class="menu">
-                </div>
+                <div class="default text">Add members by username</div>
               </div>
             </div>
             <div class="ui divider"></div>
@@ -284,6 +285,35 @@
         var modal = document.getElementById(id);
         modal.classList.toggle("active");
       }
+
+      function filterContent(groupName) {
+        var contents = <%- JSON.stringify(contents) %>;
+        var hideContents;
+        if (groupName === 'public') {
+          hideContents = contents.filter((content) => content.public !== 1);
+        } else {
+          hideContents = contents.filter((content) => content.group_name !== groupName);
+        }
+        var className; 
+        hideContents.forEach((content) => {
+          if (content.public === 1) {
+            className = '.public';
+          } else {
+            className = getClassNameFromGroupName(content.group_name);
+          }
+          $('.four.wide.column' + className).hide();
+        })
+      }
+
+      function getClassNameFromGroupName(groupName) {
+        var classNamesArray = groupName.split(' ');
+        var className = ''
+        classNamesArray.forEach((name) => {
+          className = '.' + name; 
+        })
+        return className; 
+      }
+
     </script>
     <script>
       $(document).ready(function() {

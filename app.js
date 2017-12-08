@@ -23,14 +23,21 @@ var bodyParser = require('body-parser');
 var md5 = require('md5');
 var session = require('express-session');
 
-// Login page
-app.get('/', function(req, res) {
-	res.render('index', {error: false}); 
-});
-
+// Start of web application
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({secret: 'secret-token-here', resave: false, saveUninitialized: false}));
+
+// Login page
+app.get('/', function(req, res) {
+	// TODO: If in a session, redirect to user's homepage 
+	// Check if err by checking req.session 
+	var err = (typeof req.session.err !== 'undefined' && req.session.err !== null) ? req.session.err : null; 
+	// Clear err once checked
+	req.session.err = null
+	var error = (err !== null); 
+	res.render('index', {error: error, err: err}); 
+});
 
 // Attempting to login
 app.post('/loginAuth', function(req, res) {
@@ -40,8 +47,8 @@ app.post('/loginAuth', function(req, res) {
 	connection.query(query, [username, password], function(err, rows, fields) {
 		// No user exists, render error message
 		if (rows.length === 0) {
-			var err = "The username or password you entered is incorrect."
-			res.render('index', {error: true, err: err});
+			req.session.err = "The username or password you entered is incorrect."
+			res.redirect('/')
 		} else {
 			var session = req.session;
 			session.username = username;
@@ -52,11 +59,13 @@ app.post('/loginAuth', function(req, res) {
 });
 
 // Registering new user 
-app.post('/register', function(req, res) {
-	var username = req.body.username;
-	var password = req.body.password;
-	res.render('register', {username: username, password: password, error: false}); 
-	return;
+app.get('/register', function(req, res) {
+	// Check if there's an error in req.session.err
+	var err = (typeof req.session.err !== 'undefined' && req.session.err !== null) ? req.session.err : null; 
+	// Clear err once checked
+	req.session.err = null; 
+	var error = (err !== null); 
+	res.render('register', {error: error, err: err});
 })
 
 // Attempting to register new user
@@ -71,8 +80,8 @@ app.post('/registerAuth', function(req, res) {
 	connection.query(query, username, function(err, rows, fields) {
 		// Username already exists
 		if (rows.length > 0) {
-			var err = "This username is already registered."
-			res.render('register', {username: username, password: password, error: true, err: err});
+			req.session.err = "This username is already registered.";
+			res.redirect('/register');
 		} else {
 			// Username does not exist, insert into database
 			var query = "INSERT INTO Person (username, password, first_name, last_name) Values (?, ?, ?, ?)";
@@ -88,24 +97,66 @@ app.post('/registerAuth', function(req, res) {
 // Home page of user
 // Gets FriendGroups that user is a member of and contents that are visible to user
 app.get('/home', function(req, res) {
+	// If not logged in, redirect to index page
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var username = req.session.username;
-	var success = req.session.success;
-	req.session.success = null; 
-	var contents = req.session.contents;
-	var groups = req.session['FriendGroups'];
-	Promise.all([getContents(username), getFriendGroups(username)])
-		.then((results) => {
-			req.session.contents = results[0];
-			req.session['FriendGroups'] = results[1];
-			res.render('home', {
-				username: username,
-				error: false,
-				success: success,
-				groups: req.session['FriendGroups'],
-				contents: req.session.contents 
-			})
+	// TODO: if shared to more than one group that user belongs to, show groups in 'shared from:'
+	displayHomePage(username)
+		.then((homePage) => {
+			// Check if there is a success message and err message
+			req.session.FriendGroups = homePage.groups;
+			homePage.success = req.session.success;
+			homePage.err = req.session.err; 
+			homePage.error = (typeof homePage.err !== 'undefined' && homePage.err !== null);
+			// Clear success and error message afterwards
+			req.session.success = null;
+			req.session.err = null;
+			res.render('home', homePage);
 		})
 })
+
+// Filter home page content by groupName
+app.get('/home/:groupName', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
+	var groupName = req.params.groupName;
+	var username = req.session.username;
+	displayHomePage(username)
+		.then((homePage) => {
+			// Check if there is a success message and err message
+			req.session.FriendGroups = homePage.groups;
+			homePage.success = req.session.success;
+			homePage.err = req.session.err; 
+			homePage.error = (typeof homePage.err !== 'undefined' && homePage.err !== null);
+			// Clear success and error message afterwards
+			req.session.success = null;
+			req.session.err = null;
+			// Filter content by groupName or public
+			var showContent;
+			if (groupName === 'public') {
+				showContent = homePage.contents.filter((content) => content.public === 1);
+			} else {
+				showContent = homePage.contents.filter((content) => content.group_name === groupName)
+			}
+			homePage.contents = showContent;
+			res.render('home', homePage);
+		})
+})
+
+function displayHomePage(username) {
+	var homePage = {
+		error: false,
+		err: null,
+		success: null, 
+		username: username
+	};
+
+	return Promise.all([getContents(username), getFriendGroups(username)])
+		.then((results) => {
+			homePage.contents = results[0];
+			homePage.groups = results[1];
+			return homePage; 
+		})
+}
 
 // Gets contents shared to FriendGroups user is a member of 
 // Or contents that are public to everyone 
@@ -122,27 +173,40 @@ function getContents(username) {
 	})
 }
 
+// Gets FriendGroups that user is a member of (includes FriendGroups user has created)
+function getFriendGroups(user) {
+	var query = "SELECT Member.username, FriendGroup.group_name, username_creator, description " +
+				"FROM Member, FriendGroup WHERE FriendGroup.group_name = Member.group_name " +
+				"AND Member.username_creator = FriendGroup.username AND Member.username = ?";
+	return new Promise((resolve, reject) => {
+		connection.query(query, [user, user], (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length === 0) resolve(null);
+			else { resolve(rows); }
+		});
+	})
+}
+
 // User is adding content and sharing to FriendGroup(s) or making it public
 app.post('/share-content', function(req, res) {
 	var username = req.session.username;
 	var file_path = req.body.file_path;
 	var content_name = req.body.content_name;
 	var isTagged = req.body.tag;
-	var tagged = (Array.isArray(req.body.tagged)) ? req.body.tagged : new Array(req.body.tagged);
 	var friendGroups = (Array.isArray(req.body.group_name)) ? req.body.group_name : new Array(req.body.group_name);
 	var isPrivate = req.body.isPrivate;
 
 	createContent(username, file_path, content_name, isPrivate)
 		.then((id) => {
 			if (isPrivate === 'on') {
-				var promises = friendGroups.map((group) => shareContent(id, group, username));
+				var promises = friendGroups.map((group) => shareContent(id, group));
 				return Promise.all(promises);
 			} else {
 				return null; 
 			}
 		})
 		.then(() => {
-			req.session['success'] = "You have successfully shared your content";
+			req.session.success = "You have successfully shared your content";
 			res.redirect('/home');
 		})
 })
@@ -160,10 +224,14 @@ function createContent(username, file_path, content_name, isPrivate) {
 }
 
 // Insert content into Share database
-function shareContent(id, groupName, username) {
+function shareContent(id, group) {
+	var groupInfo = group.split(',');
+	var groupName = groupInfo[0];
+	var creator = groupInfo[1];
+	console.log(groupInfo);
 	var query = "INSERT INTO Share(id, group_name, username) VALUES (?, ?, ?)";
 	return new Promise ((resolve, reject) => {
-		connection.query(query, [id, groupName, username], (err, rows) => {
+		connection.query(query, [id, groupName, creator], (err, rows) => {
 			if (err) return reject(err);
 			resolve(rows);
 		})
@@ -179,33 +247,41 @@ app.post('/create-group', function(req, res) {
 	var description = req.body.description;
 	var members = req.body.members.split(',');
 	members.push(creator);
-	var errArray = []
 
 	var promises = members.map((member) => checkUserExists(member));
 	promises.push(checkGroupNotExists(creator, groupName));
 
 	return Promise.all(promises)
 		.then((errStrings, error) => {
+			// If no errors, create FriendGroup
 			if (checkAnyErrors(errStrings) === false) {
 				createFriendGroup(creator, groupName, description);
 				members.map((member) => addMemberToGroup(member, groupName, creator)); 
 				req.session.success = "You have successfully created the FriendGroup " + groupName;
 				res.redirect('/home');
 			} else {
-				res.render('home', {username: creator, error: true, err: errStrings});
+				req.session.err = errStrings;
+				res.redirect('/home');
 			}
 		});
 })
 
-// Checking if any errors, count = number of errors
-// Null means no error
-function checkAnyErrors(errArray) {
-	count = 0;
-	for (var i = 0; i < errArray.length; i++) {
-		if (errArray[i] !== null) count += 1; 
-	}
-	// Returns true if there are errors
-	return (count !== 0); 
+// Check if member that user is trying to add to FriendGroup exists
+// If user exists, returns null
+// Checking using username 
+function checkUserExists(member) {
+	var query = "SELECT * FROM Person WHERE username = ?";
+	return new Promise((resolve, reject) => {
+		connection.query(query, member, (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length === 0) {
+				var errString = "The user " + member + " does not exist";
+				resolve(errString);
+			} else {
+				resolve(null);
+			}
+		});
+	})
 }
 
 // Check if group already exists in FriendGroup data base
@@ -225,48 +301,11 @@ function checkGroupNotExists(username, groupName) {
 	})
 }
 
-// Check if member that user is trying to add to FriendGroup exists
-// If user exists, returns null
-// Checking using username 
-function checkUserExists(member) {
-	var query = "SELECT * FROM Person WHERE username = ?";
-	return new Promise((resolve, reject) => {
-		connection.query(query, member, (err, rows) => {
-			if (err) return reject(err);
-			var errString = ''
-			if (rows.length === 0) {
-				errString = "The user " + member + " does not exist";
-				resolve(errString);
-			} else {
-				resolve(null);
-			}
-		});
-	})
-}
-
-// Used for adding user to FriendGroup
-// Checking if user exists by using first name and last name 
-// If multiple users with the same first name and last name, displays error message
-// If no such user with first name and last name, displays error message
-function checkUserExistsByName(member) {
-	var query = "SELECT username FROM Person WHERE first_name = ? AND last_name = ?";
-	var firstName = member['first-name'];
-	var lastName = member['last-name'];
-	return new Promise((resolve, reject) => {
-		connection.query(query, [firstName, lastName], (err, rows) => {
-			if (err) return reject(err);
-			var errString = '';
-			if (rows.length === 0) {
-				errString = { errString: "The user named " + firstName + " " + lastName + " does not exist" };
-				resolve(errString);
-			} else if (rows.length > 1) {
-				errString = { errString: "There are multiple users named " + firstName + " " + lastName + ". Try adding by username instead." };
-				resolve(errString);
-			} else {
-				resolve(username);
-			}
-		})
-	})
+// If every item in errArray is null, then there are no errors
+// Returns false if no errors 
+function checkAnyErrors(errArray) {
+	var allNull = errArray.every((err) => { return (err === null) });
+	return !(allNull); 
 }
 
 // Inserting into FriendGroup database
@@ -287,26 +326,31 @@ function addMemberToGroup(member, group, creator) {
 	return; 
 }
 
+// Display home page filtering 
 // Displaying only one content 
 // Shows content's contentInfo, users who were tagged, and comments 
 app.get('/content/:id', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var id = req.params.id;
 	var username = req.session.username;
-	return displayContent(id)
-		.then((results) => {
-			res.render('content', {
-				username: username,
-				contentInfo: results.contentInfo,
-				tagged: results.tagged,
-				comments: results.comments,
-				error: false
-			})
+	displayContentPage(id, username)
+		.then((content) => {
+			content.err = req.session.err;
+			content.success = req.session.success;
+			req.session.success = null;
+			req.session.err = null;
+			content.error = (typeof content.err !== 'undefined' && content.err !== null);
+			res.render('content', content);
 		})
 })
 
-// Includes content's information, users tagged in content, and content's comments 
-function displayContent(id) {
-	var content = {}; 
+function displayContentPage(id, username) {
+	var content = {
+		error: false, 
+		err: null,
+		username: username
+	}
+
 	return Promise.all([getContentInfo(id), getTags(id), getComments(id)])
 		.then((results) => {
 			content.contentInfo = results[0][0];
@@ -353,9 +397,7 @@ function getComments(id) {
 }
 
 // User is attempting to add a tag (or multiple tags) on a content 
-// TODO: shorten code using functions 
 app.post('/content/:contentId/add-tags', function(req, res) {
-	var errors = []
 	var id = req.params.contentId;
 	var tagger = req.session.username;
 	var tagged = (Array.isArray(req.body.tags)) ? req.body.tags : new Array(req.body.tags);
@@ -363,22 +405,9 @@ app.post('/content/:contentId/add-tags', function(req, res) {
 	var checkVisibility = tagged.map((taggee) => checkContentVisible(id, taggee));
 	return Promise.all(usersExist) 
 		.then((errArray) => {
-			errors = errArray
-			return checkAnyErrors(errArray);
-		})
-		.then((isError) => {
-			// If there is a tagged user that does not exist, display error on page
-			if (isError === true) {
-				return displayContent(id).then((results) => {
-					res.render('content', {
-						username: tagger,
-						contentInfo: results.contentInfo,
-						tagged: results.tagged,
-						comments: results.comments,
-						error: true,
-						err: errors
-					})
-				})
+			if (checkAnyErrors(errArray) === true) {
+				req.session.err = errArray;
+				res.redirect('/content/' + id);
 			} else {
 				// If there is not tagged user that does not exist, continue checking for errors
 				// If user is self tagging, insert into Tag with status = true
@@ -386,30 +415,18 @@ app.post('/content/:contentId/add-tags', function(req, res) {
 				// Else if content is not visible to tagged user, display error message
 				return Promise.all(checkVisibility)
 					.then((errArray) => {
-						errors = errArray;
-						return checkAnyErrors(errArray);
-					})
-					.then((isError) => {
-						// If content is not visible to a tagged user, display error on page
-						if (isError === true) {
-							return displayContent(id).then((results) => {
-								res.render('content', {
-									username: tagger,
-									contentInfo: results.contentInfo,
-									tagged: results.tagged,
-									comments: results.comments,
-									error: true,
-									err: errors
-								})
-							})
-						} else { 
-							// Else if no errors, add to Tag table and redirect to content page 
+						if (checkAnyErrors(errArray) === true) {
+							req.session.err = errArray;
+							res.redirect('/content/' + id);
+						} else {
 							var tagging = tagged.map((taggee) => addTag(tagger, taggee, id));
 							return Promise.all(tagging)
-								.then(res.redirect('/content/' + id));
+								.then(() => {
+									req.session.success = "The tag you have added will be sent to the user(s) for approval";
+									res.redirect('/content/' + id);
+								})
 						}
 					})
-				
 			}
 		})
 })
@@ -443,7 +460,6 @@ function addTag(tagger, taggee, id) {
 	})
 }
 
-
 // User is commenting on a content 
 app.post('/content/:contentId', function(req, res) {
 	var comment = req.body.comment;
@@ -459,77 +475,45 @@ app.post('/content/:contentId', function(req, res) {
 // Separate FriendGroups that user has created from FriendGroups user is a member of
 // Display FriendGroup name, description, creator (if not user), and members 
 app.get('/FriendGroups', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var username = req.session.username;
 	var FriendGroups = req.session.FriendGroups;
+	displayFriendGroupPage(FriendGroups, username)
+		.then((results) => {
+			results.err = req.session.err;
+			results.action = (typeof req.session.action !== 'undefined') ? req.session.action : null;
+			results.error = (typeof results.err !== 'undefined' && results.err !== null);
+			results.success = req.session.success;
+			req.session.success = null; 
+			req.session.err = null;
+			req.session.action = null;
+			res.render('friendGroups', results);
+		})
+
+})
+
+function displayFriendGroupPage(FriendGroups, username) {
 	var ownedByUser = FriendGroups.filter(group => group.username_creator === group.username);
 	var memberOfGroup = FriendGroups.filter(group => group.username_creator !== group.username);
 	var groupMembers = FriendGroups.map((group) => getMembersOfGroup(group));
-	var allGroupMembers; 
-	return Promise.all(groupMembers, getUserTags(username))
+
+	var FriendGroupPage = {
+		error: false,
+		err: null,
+		username: username,
+		ownedByUser: ownedByUser,
+		memberOfGroup: memberOfGroup
+	}
+
+	return Promise.all(groupMembers) 
 		.then((results) => {
-			allGroupMembers = results;
-			getUserTags(username)
+			FriendGroupPage.allGroupMembers = results;
+			return getUserTags(username)
 				.then((tags) => {
-					return res.render('friendGroups', {
-						username: username, 
-						ownedByUser: ownedByUser,
-						memberOfGroup: memberOfGroup,
-						allGroupMembers: allGroupMembers,
-						pendingTags: tags,
-						error: false
-					})
+					FriendGroupPage.pendingTags = tags
+					return FriendGroupPage
 				})
 		})
-
-})
-
-// Tagged user can either approve or decline tag that another user added
-// If approve, update tag in Tag table so status = True
-// If decline, delete tag from Tag table 
-app.post('/tag/:tagId', function(req, res) {
-	var status = req.body['tag-status'];
-	var username = req.session.username;
-	var id = req.params.tagId;
-	if (status === 'Approve') {
-		var query = "UPDATE Tag SET status = true WHERE id = ? AND username_taggee = ?";
-		connection.query(query, [id, username], function(err, rows, fields) {
-			if (err) throw err;
-		})
-	} else { // tag declined, delete entry from Tag table 
-		var query = "DELETE FROM Tag WHERE id = ? AND username_taggee = ?";
-		connection.query(query, [id, username], function(err, rows, fields) {
-			if (err) throw err;
-		})
-	}
-	return res.redirect('/FriendGroups');
-})
-
-// Getting all pending tags of user 
-// Meaning all tags of user that still need approval (or rejection)
-function getUserTags(username) {
-	var query = "SELECT Content.id, username_tagger, username_taggee, Tag.timest " +
-				"FROM Tag, Content WHERE Tag.id = Content.id AND username_taggee = ? AND status IS false";
-	return new Promise((resolve, reject) => {
-		connection.query(query, username, (err, rows) => {
-			if (err) return reject(err);
-			if (rows.length === 0) resolve(null);
-			else { resolve(rows); }
-		})
-	})
-}
-
-// Gets FriendGroups that user is a member of (includes FriendGroups user has created)
-function getFriendGroups(user) {
-	var query = "SELECT Member.username, FriendGroup.group_name, username_creator, description " +
-				"FROM Member, FriendGroup WHERE FriendGroup.group_name = Member.group_name " +
-				"AND Member.username_creator = FriendGroup.username AND Member.username = ?";
-	return new Promise((resolve, reject) => {
-		connection.query(query, [user, user], (err, rows) => {
-			if (err) return reject(err);
-			if (rows.length === 0) resolve(null);
-			else { resolve(rows); }
-		});
-	})
 }
 
 // Getting all members of a FriendGroup
@@ -554,6 +538,137 @@ function getMembersOfGroup(FriendGroup) {
 	})
 }
 
+// Getting all pending tags of user 
+// Meaning all tags of user that still need approval (or rejection)
+function getUserTags(username) {
+	var query = "SELECT Content.id, username_tagger, username_taggee, Tag.timest " +
+				"FROM Tag, Content WHERE Tag.id = Content.id AND username_taggee = ? AND status IS false";
+	return new Promise((resolve, reject) => {
+		connection.query(query, username, (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length === 0) resolve(null);
+			else { resolve(rows); }
+		})
+	})
+}
+
+// Tagged user can either approve or decline tag that another user added
+// If approve, update tag in Tag table so status = True
+// If decline, delete tag from Tag table 
+app.post('/tag/:tagId', function(req, res) {
+	var status = req.body['tag-status'];
+	var username = req.session.username;
+	var id = req.params.tagId;
+	if (status === 'Approve') {
+		var query = "UPDATE Tag SET status = true WHERE id = ? AND username_taggee = ?";
+		connection.query(query, [id, username], function(err, rows, fields) {
+			if (err) throw err;
+		})
+	} else { // tag declined, delete entry from Tag table 
+		var query = "DELETE FROM Tag WHERE id = ? AND username_taggee = ?";
+		connection.query(query, [id, username], function(err, rows, fields) {
+			if (err) throw err;
+		})
+	}
+	return res.redirect('/FriendGroups');
+})
+
+// Attempting to add a member to the FriendGroup
+app.post('/add-member', function(req, res) {
+	var username = req.session.username;
+	var groupName = req.body['friend-group'];
+	var errors = [];
+	var addMethod = req.body.method; // either by name or by username
+	req.session.action = ['add', groupName];
+	var friendGroups = req.session['FriendGroups'];
+	// Adding by username - can add more than one member to FriendGroup
+	if (addMethod === 'username') {
+		var members = req.body.members.split(',');
+		// Check if user exists and if user is already a member
+		var usersExist = members.map((member) => checkUserExists(member));
+		var alreadyMember = members.map((member) => checkUserIsMember(member, groupName, username));
+		var promises = usersExist.concat(alreadyMember); 
+		Promise.all(promises)
+			.then((errStrings) => {
+				errors = errStrings;
+				if (checkAnyErrors(errStrings) === true) {
+					req.session.err = errStrings;
+					res.redirect('/FriendGroups');
+				} else {
+					members.map((member) => addMemberToGroup(member, groupName, username));
+					req.session.success = "You have successfully added new members to " + groupName;
+					res.redirect('/FriendGroups');
+				}
+			})
+	} else { // Adding by name - can only add one member at a time to FriendGroup
+		var member = req.body.member;
+		// Checking if user exists - if multiple user with same name, returns error message
+		checkUserExistsByName(member)
+			.then((userExists) => {
+				if (userExists.errString) {
+					req.session.err = [userExists.errString];
+					res.redirect('/FriendGroups');
+				} else { // Checking if user is already a member
+					checkUserIsMember(userExists)
+						.then((error) => {
+							if (error !== null) {
+								req.session.err = [error];
+								res.redirect('/FriendGroups');
+							} else {
+								addMemberToGroup(member, groupName, username);
+								req.session.success = "You have successfully added " + member + " to " + groupName;
+								return res.redirect('/FriendGroups');
+							}
+						})
+				}
+			})
+
+	}
+})
+
+// Used for adding user to FriendGroup
+// Checking if user exists by using first name and last name 
+// If multiple users with the same first name and last name, displays error message
+// If no such user with first name and last name, displays error message
+function checkUserExistsByName(member) {
+	var query = "SELECT username FROM Person WHERE first_name = ? AND last_name = ?";
+	var firstName = member['first-name'];
+	var lastName = member['last-name'];
+	return new Promise((resolve, reject) => {
+		connection.query(query, [firstName, lastName], (err, rows) => {
+			if (err) return reject(err);
+			var errString = '';
+			if (rows.length === 0) {
+				errString = { errString: "The user named " + firstName + " " + lastName + " does not exist" };
+				resolve(errString);
+			} else if (rows.length > 1) {
+				errString = { errString: "There are multiple users named " + firstName + " " + lastName + ". Try adding by username instead." };
+				resolve(errString);
+			} else {
+				resolve(username);
+			}
+		})
+	})
+}
+
+// Checks if user is already a member of the FriendGroup
+// If there exists an entry in Member with same group_name and username_creator, return error message
+// Else return null to indicate no error
+function checkUserIsMember(username, groupName, creator) {
+	var query = "SELECT * FROM Member WHERE group_name = ? AND username_creator = ? AND username = ?";
+	return new Promise((resolve, reject) => {
+		connection.query(query, [groupName, creator, username], (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length > 0) {
+				var errString = "The user " + username + " is already a member of this FriendGroup";
+				resolve(errString);
+			} else {
+				resolve(null);
+			}
+		})
+	})
+}
+
 // Remove members from FriendGroup
 // Tags of removed member will be removed along with tags they made if status is still false
 app.post('/remove-member', function(req, res) {
@@ -564,7 +679,7 @@ app.post('/remove-member', function(req, res) {
 	var removeMembers = members.map((member) => removeMemberFromGroup(member, groupName, username));
 	var removeTags = members.map((member) => removeTagsOfMember(member, groupName, username));
 	return Promise.all([removeMembers, removeTags])
-		.then(() => res.redirect('/FriendGroups'))
+		.then(res.redirect('/FriendGroups'))
 })
 
 // Deletes member from a FriendGroup
@@ -583,103 +698,6 @@ function removeTagsOfMember(username, groupName, creator) {
 				"(username_tagger = ? AND status IS false)";
 	connection.query(query, [username, groupName, creator, username], function(err, rows, fields) {
 		if (err) throw err; 
-	})
-}
-
-// Attempting to add a member to the FriendGroup
-app.post('/add-member', function(req, res) {
-	var username = req.session.username;
-	var groupName = req.body['friend-group'];
-	var errors = [];
-	var addMethod = req.body.method; // either by name or by username
-	var action = ['add', groupName];
-	var friendGroups = req.session['FriendGroups'];
-	// Adding by username - can add more than one member to FriendGroup
-	if (addMethod === 'username') {
-		var members = req.body.members.split(',');
-		// Check if user exists and if user is already a member
-		var usersExist = members.map((member) => checkUserExists(member));
-		var alreadyMember = members.map((member) => checkUserIsMember(member, groupName, username));
-		var promises = usersExist.concat(alreadyMember); 
-		Promise.all(promises)
-			.then((errStrings) => {
-				errors = errStrings;
-				return checkAnyErrors(errStrings);
-			})
-			.then((isError) => {
-				if (isError === true) {
-					displayFriendGroupPage(friendGroups, username, errors, action)
-						.then((results) => {
-							return res.render('friendGroups', results);
-						})
-				} else {
-					members.map((member) => addMemberToGroup(member, groupName, username));
-					res.redirect('/FriendGroups')
-				}
-			})
-	} else { // Adding by name - can only add one member at a time to FriendGroup
-		var member = req.body.member;
-		// Checking if user exists - if multiple user with same name, returns error message 
-		checkUserExistsByName(member)
-			.then((result) => {
-				if (result.errString) {
-					displayFriendGroupPage(friendGroups, username, [result.errString], action)
-						.then((results) => {
-							return res.render('friendGroups', results);
-						})
-				} else {
-					// Checking if user is already a member 
-					checkUserIsMember(result)
-						.then((error) => {
-							if (error !== null) {
-								displayFriendGroupPage(friendGroups, username, [error], action)
-									.then((results) => {
-										return res.render('friendGroups', results);
-									})
-							} else {
-								addMemberToGroup(member, groupName, username);
-								return res.redirect('/FriendGroups');
-							}
-						})
-				}
-			})
-	}
-})
-
-// Whenever error is displayed, rerender FriendGroup page to display error
-// TODO: use this to shorten code throughout application
-function displayFriendGroupPage(FriendGroups, username, errors, action) {
-	var ownedByUser = FriendGroups.filter(group => group.username_creator === group.username);
-	var memberOfGroup = FriendGroups.filter(group => group.username_creator !== group.username);
-	return getUserTags(username)
-		.then((tags) => {
-			return {
-				username: username, 
-				ownedByUser: ownedByUser,
-				memberOfGroup: memberOfGroup,
-				pendingTags: tags,
-				error: true,
-				err: errors,
-				action: action
-			}
-		})
-}
-
-// Checks if user is already a member of the FriendGroup
-// If there exists an entry in Member with same group_name and username_creator, return error message
-// Else return null to indicate no error
-function checkUserIsMember(username, groupName, creator) {
-	var query = "SELECT * FROM Member WHERE group_name = ? AND username_creator = ? AND username = ?";
-	return new Promise((resolve, reject) => {
-		connection.query(query, [groupName, creator, username], (err, rows) => {
-			if (err) return reject(err);
-			if (rows.length > 0) {
-				var errString = "The user " + username + " is already a member of this FriendGroup";
-				resolve(errString);
-			} else {
-				resolve(null);
-			}
-		})
 	})
 }
 
