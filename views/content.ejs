@@ -64,6 +64,11 @@
     		display: block;
     	}
 
+      a.ui.small.blue.tag.label {
+        margin-top: 5px;
+        margin-left: 15px;
+      }
+
     	.window.close.outline.icon {
         position: absolute;
         top: 10px;
@@ -74,11 +79,20 @@
       .window.close.outline.icon:hover {
         color: #CAEBF2;
       }
+
+      #success-message {
+        width: 50%;
+        margin: 15px auto;
+      }
+
+      #success-message.closed {
+        display: none;
+      }
 	  </style>
 	</head>
   <body>
    	<div id="header">
-  		<h1 class="ui header title"> PriCoSha 
+  		<h1 class="ui header title"> <a href="/home" style="color: #FF3B3F"> PriCoSha </a>
   			<div class="shortcuts">
 	  			<a href="/FriendGroups"><i class="users icon"></i></a>
 	  			<a href="/home"><i class="home icon"></i></a>
@@ -87,6 +101,14 @@
   		</h1>
   	</div>
   	<div class="container">
+      <!-- Success Modal -->
+      <% if (typeof success !== 'undefined' && success !== null) { %>
+        <div id="success-message" class="ui positive message">
+          <i class="close icon"></i>
+          <div class="header"> Successful Submission </div>
+          <p> <%= success %></p>
+        </div>
+      <% } %>
   		<!-- Tag Content Modal -->
   		<% if (error) { %>
   		<div id="tag-modal" class="active">
@@ -112,8 +134,6 @@
 		  				<div class="ui fluid selection search dropdown multiple">
 		            <input name="tags" type="hidden">
 		            <div class="default text">Tag people by username</div>
-		            <i class="dropdown icon"></i>
-		            <div class="menu"></div>
 		          </div>
 		        </div>
 		        <input formaction="/content/<%=contentInfo.id%>/add-tags" type="submit" value="Tag User(s)" class="ui bottom attached button" style="width: 100%;">
@@ -127,36 +147,38 @@
   					<%= contentInfo.username %> 
   					<div class="user-actions">
   						<button onclick="toggleModal('tag-modal')" class="ui small labeled icon basic compact button tag"><i class="tag icon"></i>Tag Photo</button>
-  						<% if (username === contentInfo.username) { %>
+  						<!-- <% if (username === contentInfo.username) { %>
   						<button class="ui small labeled icon basic compact button edit"><i class="edit icon"></i>Edit</button>
-  						<% } %>
+  						<% } %> -->
   					</div>
   				</div>
   			</h3>
   			<img class="ui fluid image content-image" src="<%= contentInfo.file_path %>"/>
   			<div class="ui divider"></div>
   			<div class="content-info">
-  				<b> <%= contentInfo.content_name %> </b> <br/>
-          Posted at: <%= contentInfo.timest %> <br/>
-          <% if (tagged !== null) { %>
-          	Tagged: 
-          	<% tagged.forEach((taggee) => { %>
-          		<a class="ui small tag label"> <%= taggee.first_name %> <%= taggee.last_name %> </a>
-          	<% }) %>
-        	<% } %>
+          <div class="ui secondary segment">
+    				<b> <%= contentInfo.content_name %> </b> <br/>
+            Posted at: <%= contentInfo.timest %> <br/>
+            <% if (tagged !== null) { %>
+            	Tagged: 
+            	<% tagged.forEach((taggee) => { %>
+            		<a class="ui small blue tag label"> <%= taggee.first_name %> <%= taggee.last_name %> </a>
+            	<% }) %>
+          	<% } %>
+          </div>
+          <% if (comments !== null) { %>
+          <div class="ui divider"></div>
+          <% } %>
         	<div class="ui comments">
-        		<% if (comments !== null) { %>
-        		<div class="ui divider"></div>
-        			<% comments.forEach((comment) => { %>
-        				<div class="comment">
-        					<a class="author"> <%= comment.username %> </a>
-        					<div class="metadata"> 
-        						<span class="date"> <%= comment.timest %> </span>
-        					</div>
-        					<div class="text"> <%= comment.comment_text %> </div>
-        				</div>
-        			<% }) %>
-        		<% } %>
+      			<% comments.forEach((comment) => { %>
+      				<div class="comment">
+      					<a class="author"> <%= comment.username %> </a>
+      					<div class="metadata"> 
+      						<span class="date"> <%= comment.timest %> </span>
+      					</div>
+      					<div class="text"> <%= comment.comment_text %> </div>
+      				</div>
+      			<% }) %>
         	</div>
         	<div class="ui divider"></div>
  					<form action="/content/<%=contentInfo.id%>" method="POST">

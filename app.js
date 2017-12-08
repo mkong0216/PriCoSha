@@ -115,6 +115,33 @@ app.get('/home', function(req, res) {
 		})
 })
 
+// Filter home page content by groupName
+app.get('/home/:groupName', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
+	var groupName = req.params.groupName;
+	var username = req.session.username;
+	displayHomePage(username)
+		.then((homePage) => {
+			// Check if there is a success message and err message
+			req.session.FriendGroups = homePage.groups;
+			homePage.success = req.session.success;
+			homePage.err = req.session.err; 
+			homePage.error = (typeof homePage.err !== 'undefined' && homePage.err !== null);
+			// Clear success and error message afterwards
+			req.session.success = null;
+			req.session.err = null;
+			// Filter content by groupName or public
+			var showContent;
+			if (groupName === 'public') {
+				showContent = homePage.contents.filter((content) => content.public === 1);
+			} else {
+				showContent = homePage.contents.filter((content) => content.group_name === groupName)
+			}
+			homePage.contents = showContent;
+			res.render('home', homePage);
+		})
+})
+
 function displayHomePage(username) {
 	var homePage = {
 		error: false,
@@ -299,14 +326,18 @@ function addMemberToGroup(member, group, creator) {
 	return; 
 }
 
+// Display home page filtering 
 // Displaying only one content 
 // Shows content's contentInfo, users who were tagged, and comments 
 app.get('/content/:id', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var id = req.params.id;
 	var username = req.session.username;
 	displayContentPage(id, username)
 		.then((content) => {
 			content.err = req.session.err;
+			content.success = req.session.success;
+			req.session.success = null;
 			req.session.err = null;
 			content.error = (typeof content.err !== 'undefined' && content.err !== null);
 			res.render('content', content);
@@ -366,7 +397,6 @@ function getComments(id) {
 }
 
 // User is attempting to add a tag (or multiple tags) on a content 
-// TODO: shorten code using functions 
 app.post('/content/:contentId/add-tags', function(req, res) {
 	var id = req.params.contentId;
 	var tagger = req.session.username;
@@ -391,7 +421,10 @@ app.post('/content/:contentId/add-tags', function(req, res) {
 						} else {
 							var tagging = tagged.map((taggee) => addTag(tagger, taggee, id));
 							return Promise.all(tagging)
-								.then(res.redirect('/content/' + id));
+								.then(() => {
+									req.session.success = "The tag you have added will be sent to the user(s) for approval";
+									res.redirect('/content/' + id);
+								})
 						}
 					})
 			}
@@ -442,6 +475,7 @@ app.post('/content/:contentId', function(req, res) {
 // Separate FriendGroups that user has created from FriendGroups user is a member of
 // Display FriendGroup name, description, creator (if not user), and members 
 app.get('/FriendGroups', function(req, res) {
+	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var username = req.session.username;
 	var FriendGroups = req.session.FriendGroups;
 	displayFriendGroupPage(FriendGroups, username)

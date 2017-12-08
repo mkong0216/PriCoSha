@@ -36,8 +36,10 @@
     	}
 
       #content {
-        margin: 5px;
-        padding: 5px;
+        padding: 10px;
+        width: 75%;
+        margin: auto;
+
       }
 
       .friendGroup {
@@ -114,7 +116,7 @@
 	</head>
   <body>
    	<div id="header">
-  		<h1 class="ui header title"> PriCoSha 
+  		<h1 class="ui header title"> <a href="/home" style="color: #FF3B3F"> PriCoSha </a>
   			<div class="shortcuts">
 	  			<a href="/FriendGroups"><i class="users icon"></i></a>
 	  			<a href="/home"><i class="home icon"></i></a>
@@ -133,69 +135,75 @@
       <% } %>
       <div class="pending-tags">
         <h3 class="ui header"> Pending Tags </h3>
+        <% if (pendingTags !== null) { %>
         <div class="ui cards">
-          <% if (pendingTags !== null) { %>
-            <% pendingTags.forEach((tag) => { %>
-              <div class="card fluid">
-                <div class="content">
-                  <div class="header"> 
-                    <%= tag.username_tagger %> wants to tag you in a <a href="/content/<%=tag.id%>"> post </a>
-                  </div>
-                  <div class="meta"> Tagged at <%= tag.timest %> </div>
-                  <div class="ui divider"></div>
-                  <div class="extra content">
-                    <form action="/FriendGroups" method="POST">
-                      <div class="ui two buttons">
-                        <input formaction="/tag/<%=tag.id%>" type="submit" value="Approve" name="tag-status" class="ui basic green button">
-                        <input formaction="/tag/<%=tag.id%>" type="submit" value="Decline" name="tag-status" class="ui basic red button">
-                      </div>
-                    </form>
-                  </div>
+          <% pendingTags.forEach((tag) => { %>
+            <div class="card fluid">
+              <div class="content">
+                <div class="header"> 
+                  <%= tag.username_tagger %> wants to tag you in a <a href="/content/<%=tag.id%>"> post </a>
+                </div>
+                <div class="meta"> Tagged at <%= tag.timest %> </div>
+                <div class="ui divider"></div>
+                <div class="extra content">
+                  <form action="/FriendGroups" method="POST">
+                    <div class="ui two buttons">
+                      <input formaction="/tag/<%=tag.id%>" type="submit" value="Approve" name="tag-status" class="ui basic green button">
+                      <input formaction="/tag/<%=tag.id%>" type="submit" value="Decline" name="tag-status" class="ui basic red button">
+                    </div>
+                  </form>
                 </div>
               </div>
-            <% }) %>
-          <% } %>
+            </div>
+          <% }) %>
         </div>
+        <% } else { %>
+          <p> You have no pending tags that need approval. </p>
+        <% } %>
       </div>
       <div class="groups-owned">
         <h3 class="ui header"> FriendGroups You Have Created: </h3>
+        <% if (ownedByUser.length > 0) { %>
         <div class="ui cards">
-          <% if (ownedByUser.length > 0) { %>
-            <% ownedByUser.forEach((group) => { %>
-              <div class="friendGroup card">
-                <div class="content">
-                  <div class="header"> <%= group.group_name %> </div>
-                  <div class="description"> <%= group.description %></div>
-                  <div class="ui divider"></div>
-                  <div class="extra content">
-                    <div class="ui two buttons">
-                      <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'add')" class="ui basic green button">
-                        <i class="add user icon"></i> Add </div>
-                      <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'remove')" class="ui basic red button"> 
-                        <i class="remove user icon"></i> Remove </div> 
-                    </div>
+          <% ownedByUser.forEach((group) => { %>
+            <div class="friendGroup card">
+              <div class="content">
+                <div class="header"> <%= group.group_name %> </div>
+                <div class="description"> <%= group.description %></div>
+                <div class="ui divider"></div>
+                <div class="extra content">
+                  <div class="ui two buttons">
+                    <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'add')" class="ui basic green button">
+                      <i class="add user icon"></i> Add </div>
+                    <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'remove')" class="ui basic red button"> 
+                      <i class="remove user icon"></i> Remove </div> 
                   </div>
                 </div>
               </div>
-            <% }) %>
-          <% } %>
+            </div>
+          <% }) %>
         </div>
+        <% } else { %>
+          <p> You have not created any FriendGroups. </p>
+        <% } %>
       </div>
       <div class="groups-member">
         <h3 class="ui header"> FriendGroups You Are a Member Of </h3>
+        <% if (memberOfGroup.length > 0) { %>
         <div class="ui cards">
-          <% if (memberOfGroup.length > 0) { %>
-            <% memberOfGroup.forEach((group) => { %>
-              <div class="friendGroup card">
-                <div class="content">
-                  <div class="header"> <%= group.group_name %> </div>
-                  <div class="meta"> Created by <%= group.username_creator %> </div>
-                  <div class="description"> <%= group.description %> </div>
-                </div>
-              </div> 
-            <% }) %>
-          <% } %>
+          <% memberOfGroup.forEach((group) => { %>
+            <div class="friendGroup card">
+              <div class="content">
+                <div class="header"> <%= group.group_name %> </div>
+                <div class="meta"> Created by <%= group.username_creator %> </div>
+                <div class="description"> <%= group.description %> </div>
+              </div>
+            </div> 
+          <% }) %>
         </div>
+        <% } else { %>
+          <p> You are not a member of any FriendGroups </p>
+        <% } %>
       </div>
       <!-- Edit FriendGroup Modal -->
       <% if (error === true) { %>
@@ -303,7 +311,7 @@
       </div>
     </div>
     <script>
-      var currentGroupClassName; 
+      var currentGroupClassName = ""; 
 
       function cancelEditModal(id) {
         var modal = document.getElementById(id);
@@ -339,10 +347,12 @@
           classNames.forEach((name) => {
             currentGroupClassName += "." + name;
           })
+          currentGroupClassName += ".field";
           $('.ui.form .grouped.fields.add-user').hide();
-          $(currentGroupClassName + '.field').show();
-          $('#remove-user').show();
           $('#add-user').hide();
+          $('#remove-user').show();
+          $('#remove-field').show();
+          $(currentGroupClassName).show();
         }
       }
     </script>
