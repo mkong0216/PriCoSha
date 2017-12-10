@@ -170,14 +170,25 @@
               <div class="content">
                 <div class="header"> <%= group.group_name %> </div>
                 <div class="description"> <%= group.description %></div>
-                <div class="ui divider"></div>
-                <div class="extra content">
-                  <div class="ui two buttons">
-                    <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'add')" class="ui basic green button">
-                      <i class="add user icon"></i> Add </div>
-                    <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'remove')" class="ui basic red button"> 
-                      <i class="remove user icon"></i> Remove </div> 
-                  </div>
+              </div>
+              <div class="members content">
+                  <h4 class="ui sub header"> Members : </h4>
+                  <ul class="ui list">
+                    <% allGroupMembers.forEach((membersGroup) => { %>
+                      <% if (membersGroup.groupName === group.group_name && membersGroup.creator === group.username_creator) { %>
+                        <% membersGroup.groupMembers.forEach((member) => { %>
+                          <li> <%= member.first_name %> <%= member.last_name %> (<a>@<%= member.username %></a>) </li>
+                        <% }) %>
+                      <% } %>
+                    <% }) %>
+                  </ul>
+              </div>
+              <div class="extra content">
+                <div class="ui two buttons">
+                  <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'add')" class="ui basic green button">
+                    <i class="add user icon"></i> Add </div>
+                  <div onclick="toggleEditModal('edit-modal', '<%=group.group_name%>', 'remove')" class="ui basic red button"> 
+                    <i class="remove user icon"></i> Remove </div> 
                 </div>
               </div>
             </div>
