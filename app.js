@@ -30,7 +30,7 @@ app.use(session({secret: 'secret-token-here', resave: false, saveUninitialized: 
 
 // Login page
 app.get('/', function(req, res) {
-	// TODO: If in a session, redirect to user's homepage 
+	if (typeof req.session.username !== 'undefined') return res.redirect('/home');
 	// Check if err by checking req.session 
 	var err = (typeof req.session.err !== 'undefined' && req.session.err !== null) ? req.session.err : null; 
 	// Clear err once checked
@@ -60,6 +60,7 @@ app.post('/loginAuth', function(req, res) {
 
 // Registering new user 
 app.get('/register', function(req, res) {
+	if (typeof req.session.username !== 'undefined') return res.redirect('/home');
 	// Check if there's an error in req.session.err
 	var err = (typeof req.session.err !== 'undefined' && req.session.err !== null) ? req.session.err : null; 
 	// Clear err once checked
@@ -707,8 +708,8 @@ app.post('/add-member', function(req, res) {
 								req.session.err = [error];
 								res.redirect('/FriendGroups');
 							} else {
-								addMemberToGroup(member, groupName, username);
-								req.session.success = "You have successfully added " + member + " to " + groupName;
+								addMemberToGroup(userExists, groupName, username);
+								req.session.success = "You have successfully added " + member['first-name'] + " "  + member['last-name'] + " to " + groupName;
 								return res.redirect('/FriendGroups');
 							}
 						})
@@ -737,7 +738,7 @@ function checkUserExistsByName(member) {
 				errString = { errString: "There are multiple users named " + firstName + " " + lastName + ". Try adding by username instead." };
 				resolve(errString);
 			} else {
-				resolve(username);
+				resolve(rows[0].username);
 			}
 		})
 	})
