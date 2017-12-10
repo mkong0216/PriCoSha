@@ -87,6 +87,8 @@ app.post('/registerAuth', function(req, res) {
 			var query = "INSERT INTO Person (username, password, first_name, last_name) Values (?, ?, ?, ?)";
 			connection.query(query, [username, hashedPassword, firstName, lastName], function(err, rows, fields) {
 				if (err) throw err;
+				var session = req.session;
+				session.username = username;
 				res.redirect('/home');
 			});
 		}
@@ -95,7 +97,7 @@ app.post('/registerAuth', function(req, res) {
 })
 
 // Home page of user
-// Gets FriendGroups that user is a member of and contents that are visible to user
+// Gets contents from FriendGroups that user is a member of and contents that are visible to user
 app.get('/home', function(req, res) {
 	// If not logged in, redirect to index page
 	if (typeof req.session.username === 'undefined') return res.redirect('/');
@@ -116,9 +118,10 @@ app.get('/home', function(req, res) {
 })
 
 // Filter home page content by groupName
-app.get('/home/:groupName', function(req, res) {
+app.get('/home/:creator/:groupName', function(req, res) {
 	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var groupName = req.params.groupName;
+	var creator = req.params.creator;
 	var username = req.session.username;
 	displayHomePage(username)
 		.then((homePage) => {
@@ -135,7 +138,10 @@ app.get('/home/:groupName', function(req, res) {
 			if (groupName === 'public') {
 				showContent = homePage.contents.filter((content) => content.public === 1);
 			} else {
-				showContent = homePage.contents.filter((content) => content.group_name === groupName)
+				showContent = homePage.contents.filter((content) => {
+					var index = (content.group_name !== null) ? content.group_name.indexOf(groupName) : -1;
+					return (index !== -1 && content.username_creator[index] === creator);
+				})
 			}
 			homePage.contents = showContent;
 			res.render('home', homePage);
@@ -153,6 +159,7 @@ function displayHomePage(username) {
 	return Promise.all([getContents(username), getFriendGroups(username)])
 		.then((results) => {
 			homePage.contents = results[0];
+			checkDuplicateIds(homePage.contents);
 			homePage.groups = results[1];
 			return homePage; 
 		})
@@ -161,15 +168,38 @@ function displayHomePage(username) {
 // Gets contents shared to FriendGroups user is a member of 
 // Or contents that are public to everyone 
 function getContents(username) {
-	var query = "SELECT * FROM Content NATURAL LEFT JOIN Share WHERE Content.public IS true " +
-				"OR (group_name, username) IN " +
+	var query = "SELECT Content.*, Share.username AS username_creator, group_name " +
+				"FROM Content LEFT JOIN Share USING (id) WHERE Content.public IS true " +
+				"OR (group_name, Share.username) IN " +
 				"(SELECT group_name, username_creator FROM Member WHERE username = ?)" +
 				"ORDER BY timest DESC"
 	return new Promise((resolve, reject) => {
 		connection.query(query, username, function(err, rows, fields) {
 			if (err) return reject(err);
+			rows.forEach((row) => {
+				if (row.username_creator !== null) {
+					row.username_creator = new Array(row.username_creator); 
+					row.group_name = new Array(row.group_name);
+				}
+			})
 			resolve(rows);
 		})
+	})
+}
+
+// If content is shared to more than one group that user is a member of,
+// add the group_name, username to the first occurence of the content 
+function checkDuplicateIds(contents) {
+	return contents.map((content, index) => {
+		for (var i = contents.length - 1; i > index; i--) {
+			var creatorsArray = content.username_creator;
+			var groupNames = content.group_name; 
+			if (contents[i].id === content.id) {
+				creatorsArray.push(contents[i].username_creator[0]);
+				groupNames.push(contents[i].group_name[0]);
+				contents.splice(i, 1);
+			} 
+		}
 	})
 }
 
@@ -225,10 +255,9 @@ function createContent(username, file_path, content_name, isPrivate) {
 
 // Insert content into Share database
 function shareContent(id, group) {
-	var groupInfo = group.split(',');
+	var groupInfo = group.split(':');
 	var groupName = groupInfo[0];
 	var creator = groupInfo[1];
-	console.log(groupInfo);
 	var query = "INSERT INTO Share(id, group_name, username) VALUES (?, ?, ?)";
 	return new Promise ((resolve, reject) => {
 		connection.query(query, [id, groupName, creator], (err, rows) => {
@@ -326,7 +355,6 @@ function addMemberToGroup(member, group, creator) {
 	return; 
 }
 
-// Display home page filtering 
 // Displaying only one content 
 // Shows content's contentInfo, users who were tagged, and comments 
 app.get('/content/:id', function(req, res) {
@@ -340,9 +368,60 @@ app.get('/content/:id', function(req, res) {
 			req.session.success = null;
 			req.session.err = null;
 			content.error = (typeof content.err !== 'undefined' && content.err !== null);
-			res.render('content', content);
+			getShareGroups(id, username)
+				.then((groups) => {
+					content.share = groups;
+					res.render('content', content);
+				})
 		})
 })
+
+// User who created content can edit the content_name and/or change content to public
+// If content changed to public, content is still shared to original FriendGroups
+// On home page, content has new "Public" tag for "Shared From" label
+app.post('/content/:contentId/edit', function(req, res) {
+	var id = req.params.contentId;
+	var contentName = req.body.content_name;
+	var isPublic = (req.body.public === 'on');
+	var query = "UPDATE Content SET content_name = ?, public = ? WHERE id = ?";
+	connection.query(query, [contentName, isPublic, id], function (err, rows, fields) {
+		if (err) throw err;
+	});
+	return res.redirect('/content/' + id);
+})
+
+// Deleting a content
+// 1) Delete from FriendGroups table
+// 2) Delete from Tags table 
+// 3) Delete from Comment table
+// 3) Delete from Content table 
+app.post('/content/:id/delete', function(req, res) {
+	var id = req.params.id; 
+	var tables = ['Share', 'Tag', 'Comment', 'Content'];
+	var promises = tables.map((table) => deleteContentFrom(table, id));
+	return Promise.all(promises)
+		.then(res.redirect('/home'));
+})
+
+// User who owns content can share it to other FriendGroups he/she is a member of
+app.post('/content/:contentId/share', function(req, res) {
+	var id = req.params.contentId;
+	var groups = (Array.isArray(req.body.group_name)) ? req.body.group_name : new Array(req.body.group_name);
+	var promises = groups.map((group) => shareContent(id, group));
+	Promise.all(promises)
+		.then(() => {
+			req.session.success = "You have successfully shared this content";
+			res.redirect('/content/' + id);
+		})
+})
+
+// Deletes content from each table 
+function deleteContentFrom(table, id) {
+	var query = "DELETE FROM " + table + " WHERE id = ?";
+	return connection.query(query, id, function(err, rows, fields) {
+		if (err) throw err;
+	})
+}
 
 function displayContentPage(id, username) {
 	var content = {
@@ -358,6 +437,20 @@ function displayContentPage(id, username) {
 			content.comments = results[2];
 			return content; 
 		})
+}
+
+// Get FriendGroups content is shared to
+function getShareGroups(id, username) {
+	var query = "SELECT username_creator, group_name FROM Member WHERE username = ? " + 
+				"AND (username_creator, group_name) NOT IN " + 
+				"(SELECT username, group_name FROM Share WHERE id = ?)";
+	return new Promise((resolve, reject) => {
+		connection.query(query, [username, id], (err, rows) => {
+			if (err) return reject(err);
+			if (rows.length === 0) resolve(null)
+			else resolve(rows);
+		})
+	})
 }
 
 // Gets all attributes from Content database for id
@@ -477,7 +570,7 @@ app.post('/content/:contentId', function(req, res) {
 app.get('/FriendGroups', function(req, res) {
 	if (typeof req.session.username === 'undefined') return res.redirect('/');
 	var username = req.session.username;
-	var FriendGroups = req.session.FriendGroups;
+	var FriendGroups = req.session.FriendGroups || [];
 	displayFriendGroupPage(FriendGroups, username)
 		.then((results) => {
 			results.err = req.session.err;
@@ -518,7 +611,6 @@ function displayFriendGroupPage(FriendGroups, username) {
 
 // Getting all members of a FriendGroup
 // Displayed as list when attempting to remove a user from a FriendGroup
-// TODO: display in FriendGroup page 
 function getMembersOfGroup(FriendGroup) {
 	var group_name = FriendGroup.group_name;
 	var creator = FriendGroup.username_creator;

@@ -171,12 +171,17 @@
                   Content ID: <%= content.id %> <br/>
                   Posted at: <%= content.timest %> <br/>
                   Shared from: 
-                    <% if (content.group_name !== null) { %>
-                    <!-- content.group_name = FriendGroup content is shared to -->
-                    <a href="/home/<%= content.group_name %>" class="ui basic small blue label"> <%= content.group_name %> </a>
-                    <% } else { %>
-                    <a href="/home/public" class="ui basic small blue label"> Public </a>
+                  <% if (content.group_name !== null) { %>
+                  <!-- content.group_name = array of FriendGroups content is shared to -->
+                    <% (content.group_name).forEach((groupName, index) => { %>
+                      <a href="/home/<%= content.username_creator[index]%>/<%= groupName %>" class="ui basic small blue label"> <%= groupName %> </a>
+                    <% }) %>
+                    <% if (content.public === 1) { %>
+                      <a href="/home/content/public" class="ui basic small blue label"> Public </a>
                     <% } %>
+                  <% } else { %>
+                    <a href="/home/content/public" class="ui basic small blue label"> Public </a>
+                  <% } %>
                 </div>
               </div>
             </div>
@@ -199,10 +204,16 @@
               <input maxlength="50" name="content_name" placeholder="Your text here">
             </div>
             <div class="inline field">
+              <% if (groups === null) { %>
+              <div class="ui negative small message">
+                Content will be made public since you have no FriendGroups to share with
+              </div>
+              <% } else { %>
               <div class="ui toggle checkbox">
                 <input onclick="toggleModal('share')" type="checkbox" id="isPrivate" name="isPrivate">
                 <label for="private">Make content private? </label>
               </div>
+              <% } %>
             </div>  
 
             <!-- Share with which FriendGroups Modal -->
@@ -214,7 +225,7 @@
                     <% groups.forEach(group => { %>
                       <div class="item">
                         <div class="ui checkbox" style="padding: 3px">
-                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>,<%= group.username_creator%>">
+                          <input type="checkbox" id="group_name" name="group_name" value="<%= group.group_name %>:<%= group.username_creator%>">
                           <label for="group_name"> <%= group.group_name %> (Created by: <b> <%= group.username_creator %> </b>)</label>
                         </div>
                       </div>

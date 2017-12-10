@@ -198,11 +198,23 @@
                 <div class="meta"> Created by <%= group.username_creator %> </div>
                 <div class="description"> <%= group.description %> </div>
               </div>
-            </div> 
+              <div class="members content">
+                <h4 class="ui sub header"> Members : </h4>
+                <ul class="ui list">
+                  <% allGroupMembers.forEach((membersGroup) => { %>
+                    <% if (membersGroup.groupName === group.group_name && membersGroup.creator === group.username_creator) { %>
+                      <% membersGroup.groupMembers.forEach((member) => { %>
+                        <li> <%= member.first_name %> <%= member.last_name %> (<a>@<%= member.username %></a>) </li>
+                      <% }) %>
+                    <% } %>
+                  <% }) %>
+                </ul>
+              </div>
+            </div>
           <% }) %>
         </div>
         <% } else { %>
-          <p> You are not a member of any FriendGroups </p>
+          <p> You are not a member of any FriendGroups. </p>
         <% } %>
       </div>
       <!-- Edit FriendGroup Modal -->
@@ -284,7 +296,7 @@
                   <div class="item">
                     <div class="ui checkbox" style="padding: 3px">
                       <input type="checkbox" id="remove-member" name="remove-member" value="<%= member['username']%>">
-                      <label for="group_name"> <%= member['first_name']%> <%= member['last_name'] %> (<%= member['username']%>)</label>
+                      <label for="group_name"> <%= member['first_name']%> <%= member['last_name'] %> (<a> @<%= member['username']%> </a>)</label>
                     </div>
                   </div>
                   <% } %>
